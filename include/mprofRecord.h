@@ -3,12 +3,11 @@
 	Project: ahmalloc ( https://www.alexanderhaase.net/projects/ahmalloc.html )
 	Created: 2013-09-08
 	License: LGPL
-*/
 
-void * (alloc)( size_t size );
-void (*free)( void * in_ptr );
-void * (*realloc)( void * in_ptr, size_t size );
-void * (*calloc)( size_t in_size, size_t in_qty );
+	Record format for binary per-allocation tracking.
+*/
+#pragma once
+#include <stdint.h>
 
 #define MPROF_MODE_EMPTY	( 0u )
 #define MPROF_MODE_MALLOC	( 1u )
@@ -49,3 +48,10 @@ struct MProfRecord {
 	uint8_t mode;
 	uint8_t padding[ 3 ];
 } __attribute__(( __packed__ ));
+
+
+/*!	Sets the record time stamp to now.
+
+	\param[ in, out ]	record	The record to timestamp
+*/
+void mprofRecordTimeStamp( struct MprofRecord * in_out_record );

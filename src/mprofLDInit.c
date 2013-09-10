@@ -96,4 +96,4 @@ static void * reallocLDInit( void * in_ptr, size_t in_size ) {
 	}
 }
 
-const struct AllocatorVtable mprofLDInitVtable = { &mallocLDInit, &freeLDInit, &callocLDInit, &reallocLDInit };
+const struct AllocatorVtable mprofLDInitVtable = { &mallocLDInit, &freeLDInit, &callocLDInit, &reallocLDInit, NULL, NULL, "LD_NEXT" };
