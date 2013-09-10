@@ -101,4 +101,4 @@ static void mprofCountDestruct( void ) {
 	printf( "\n" );
 }
 
-const struct AllocatorVtable mprofCountVtable = { mallocCount, freeCount, callocCount, reallocCount, NULL, mprofCountDestruct, "Count" };
+const struct AllocatorVtable mprofCountVtable = { &mallocCount, &freeCount, &callocCount, &reallocCount, NULL, &mprofCountDestruct, "Count" };

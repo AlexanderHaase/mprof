@@ -16,6 +16,7 @@
 #include <mprofLogFD.h>
 #include <mprofCount.h>
 #include <ParseEnv.h>
+#include <TmpAlloc.h>
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -32,7 +33,7 @@ const struct AllocatorVtable * lookupVtable( const char * in_str, size_t in_strS
 		if( strncmp( in_tables[ index ]->name, in_str, in_strSize ) == 0 ) {
 			return in_tables[ index ];
 		}
-	}
+	} 
 	return NULL;
 }
 
@@ -45,13 +46,15 @@ void installVtableOrDie( const char * in_key, const struct AllocatorVtable * in_
 	size_t valueSize;
 	const char * value = findArg( config, in_key, &valueSize );
 	if( NULL == value ) {
-		perror( "Error: libmprof: Malformed or inadequte config in MPROF_CONF" );
+		fprintf( stderr,  "Error: libmprof: Could not find value for '%s' in env var 'MPROF_CONF'.\n", in_key );
 		exit( -1 );
 	}
 
 	const struct AllocatorVtable * table = lookupVtable( value, valueSize, in_tables );
 	if( NULL == table ) {
-		perror( "Error: libmprof: cannot find specified vtable" );
+		//not wise, but neither is fprintf without malloc....
+		((char*) value )[ valueSize ] = '\0';
+		fprintf( stderr,  "Error: libmprof: Cannot find vtable '%s' candidate for '%s'\n", value, in_key );
 		exit( -1 );
 	}
 
@@ -62,15 +65,22 @@ void installVtableOrDie( const char * in_key, const struct AllocatorVtable * in_
 }
 
 static void /*__attribute__(( constructor ))*/ libmprofInit( void ) {
+	/* AH order is important: INIT will probably strap in MODE's vtable */
+	mprofVtable = tmpAllocVtable; //AH, maybe this will let fprintf work in a pinch?	
+	installVtableOrDie( "MODE", mprofModeTargets, &postInitVtable );
 	installVtableOrDie( "INIT", mprofInitTargets, &mprofVtable );
-	installVtableOrDie( "MODE", mprofModeTargets, &postLDInitVtable );
 }
 
 void __attribute__(( destructor )) libmprofDestruct( void ) {
 	if( mprofVtable.destruct ) {
 		mprofVtable.destruct();
+
+		/* dump some text so people know we exited cleanly */
+		const char * modeName = mprofVtable.name;
+		mprofVtable = tmpAllocVtable;
+		fprintf( stderr,  "Info: libmprof: called destructor for 'MODE' '%s'\n", modeName );
 	}
-	printf( "Libmprof destruct\n" );
+	
 }
 
 void * malloc( size_t in_size ) {

@@ -3,7 +3,8 @@ OBJECTS=src/Personality.o		\
 	src/mprofLDInit.o		\
 	src/mprofLogFD.o		\
 	src/ParseEnv.o			\
-	src/mprofCount.o
+	src/mprofCount.o		\
+	src/TmpAlloc.o
 
 CFLAGS := -Wall -Wextra -Werror --pedantic -I./include -g -std=c99 -fPIC
 LDLIBS := -ldl

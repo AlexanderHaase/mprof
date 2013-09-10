@@ -8,5 +8,6 @@
 */
 #include <Personality.h>
 
-//relocate this to main...struct AllocatorVtable mprofVtable = { NULL, NULL, NULL, NULL };
+//relocated this to main...struct AllocatorVtable mprofVtable = { NULL, NULL, NULL, NULL };
 struct AllocatorVtable defaultVtable = { NULL, NULL, NULL, NULL, NULL, NULL, NULL };
+struct AllocatorVtable postInitVtable = { NULL, NULL, NULL, NULL, NULL, NULL, NULL };

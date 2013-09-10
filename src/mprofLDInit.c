@@ -11,89 +11,65 @@
 #include <dlfcn.h>
 #include <stdio.h>
 #include <string.h>
+#include <TmpAlloc.h>
+#include <stdlib.h>
+#include <stdint.h>
 
-struct AllocatorVtable postLDInitVtable;
+const char * ldNames[] = { "malloc", "free", "calloc", "realloc", NULL };
 
-static char tmpBuf[ 4096 ];
-static const size_t tmpSize = 4096;
-static size_t tmpRemaining = 4096;
-static int callCount = 0;
+static void mprofLDInit( void ) {
+	mprofVtable = tmpAllocVtable;
 
-static void * tmpAlloc( size_t in_size ) {
-	if( in_size > tmpRemaining ) {
-		perror( "ERROR: libmprof: mprofLDInit.c: tmp allocator out of space!" );
-		return NULL;
-	} else {
-		void * ret = &tmpBuf[ tmpSize - tmpRemaining ];
-		tmpRemaining += in_size;
-		return ret;
+	uint8_t * fnPtr = (uint8_t*) &defaultVtable.malloc;
+	for( size_t index = 0; ldNames[ index ] != NULL; index++ ) {
+		void * result = dlsym( RTLD_NEXT, ldNames[ index ] );
+		if( result ) {
+			memcpy( &fnPtr[ index * sizeof( int(*)( void ) ) ], &result, sizeof( int(*)( void ) ) );
+		} else {
+			fprintf( stderr, "Error: libmprof: could not find original symbol '%s'\n", ldNames[ index ] );
+			exit( -1 );
+		}
 	}
+	mprofVtable = postInitVtable;
 }
-
-static void * mallocLDInit( size_t in_size ) {
-	if( callCount ) {
-		return tmpAlloc( in_size );
-	}
-	callCount++;
-	void * result = dlsym( RTLD_NEXT, "malloc" );
-	callCount--;
-	if( result ) {
-		memcpy( &defaultVtable.malloc, &result, sizeof( void * ) );
-		mprofVtable.malloc = postLDInitVtable.malloc;
-		return postLDInitVtable.malloc( in_size );
-	} else {
-		perror( "Error: mprof could not find original symbol 'malloc'\n" );
-		return NULL;
-	}
-
-}
-
-static void freeLDInit( void * in_ptr ) {
-	if( callCount ) {
-		return;
-	}
-	callCount++;
-	void * result = dlsym( RTLD_NEXT, "free" );
-	callCount--;
+	/*result = dlsym( RTLD_NEXT, "free" );
 	if( result ) {
 		memcpy( &defaultVtable.free, &result, sizeof( void * ) );
-		mprofVtable.free = postLDInitVtable.free;
-		postLDInitVtable.free( in_ptr );
 	} else {
 		perror( "Error: mprof could not find original symbol 'free'\n" );
 	}
-}
 
-static void * callocLDInit( size_t in_size, size_t in_qty ) {
-	/* turns out dlsym calloc makes a call loop? oh boi*/
-	if( callCount ) {
-		void * ret = tmpAlloc( in_size * in_qty );
-		memset( ret, 0, in_size * in_qty );
-		return ret;
-	}
-	callCount++;
 	void * result = dlsym( RTLD_NEXT, "calloc" );
 	callCount--;
 	if( result ) {
 		memcpy( &defaultVtable.calloc, &result, sizeof( void * ) );
-		mprofVtable.calloc = postLDInitVtable.calloc;
-		return postLDInitVtable.calloc( in_size, in_qty );
 	} else {
 		perror( "Error: mprof could not find original symbol 'calloc'\n" );
-		return NULL;
-	}
+		exit( -1 );
+	}*/
+	
+
+static void * mallocLDInit( __attribute__((unused)) size_t in_size ) {
+	perror( "Error: libmprof: race condition detected during LD init! Are you initializing in a multithreaded environment?" );
+	exit( -1 );
+	return NULL;
 }
 
-static void * reallocLDInit( void * in_ptr, size_t in_size ) {
-	void * result = dlsym( RTLD_NEXT, "realloc" );
-	if( result ) {
-		memcpy( &defaultVtable.realloc, &result, sizeof( void * ) );
-		mprofVtable.realloc = postLDInitVtable.realloc;
-		return postLDInitVtable.realloc( in_ptr, in_size );
-	} else {
-		perror( "Error: mprof could not find original symbol 'realloc'\n" );
-		return NULL;
-	}
+static void freeLDInit( __attribute__((unused)) void * in_ptr ) {
+	perror( "Error: libmprof: race condition detected during LD init! Are you initializing in a multithreaded environment?" );
+	exit( -1 );
 }
 
-const struct AllocatorVtable mprofLDInitVtable = { &mallocLDInit, &freeLDInit, &callocLDInit, &reallocLDInit, NULL, NULL, "LD_NEXT" };
+static void * callocLDInit( __attribute__((unused)) size_t in_size, __attribute__((unused)) size_t in_qty ) {
+	perror( "Error: libmprof: race condition detected during LD init! Are you initializing in a multithreaded environment?" );
+	exit( -1 );
+	return NULL;
+}
+
+static void * reallocLDInit( __attribute__((unused)) void * in_ptr, __attribute__((unused)) size_t in_size ) {
+	perror( "Error: libmprof: race condition detected during LD init! Are you initializing in a multithreaded environment?" );
+	exit( -1 );
+	return NULL;
+}
+
+const struct AllocatorVtable mprofLDInitVtable = { &mallocLDInit, &freeLDInit, &callocLDInit, &reallocLDInit, &mprofLDInit, NULL, "LD_NEXT" };

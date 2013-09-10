@@ -28,5 +28,8 @@ struct AllocatorVtable {
 //! vtable mprof uses to fulfill request
 extern struct AllocatorVtable mprofVtable;
 
+//! bootstrapping vtable for setting MODE
+extern struct AllocatorVtable postInitVtable;
+
 //! vtable for backing allocator
 extern struct AllocatorVtable defaultVtable;
