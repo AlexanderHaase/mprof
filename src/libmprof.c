@@ -21,7 +21,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-const char * defaultConfig = "INIT=LD_NEXT MODE=LogFD";
+const char * defaultConfig = "INIT=LD_NEXT MODE=Count";
 
 const struct AllocatorVtable * mprofInitTargets[] = { &mprofLDInitVtable, NULL };
 const struct AllocatorVtable * mprofModeTargets[] = { &mprofLogFDVtable, &mprofCountVtable, NULL };

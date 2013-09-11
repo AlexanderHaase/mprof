@@ -4,10 +4,11 @@ OBJECTS=src/Personality.o		\
 	src/mprofLogFD.o		\
 	src/ParseEnv.o			\
 	src/mprofCount.o		\
-	src/TmpAlloc.o
+	src/TmpAlloc.o			\
+	src/mprofRecord.o
 
 CFLAGS := -Wall -Wextra -Werror --pedantic -I./include -g -std=c99 -fPIC
-LDLIBS := -ldl
+LDLIBS := -lpthread -ldl
 
 #LDLIBS must be the last arg to gcc for some reason....
 $(PROJECT): $(OBJECTS)

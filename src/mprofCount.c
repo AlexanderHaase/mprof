@@ -11,6 +11,9 @@
 #include <mprofCount.h>
 #include <string.h>
 #include <stdio.h>
+#include <mprofRecord.h>
+#include <semaphore.h>
+#include <assert.h>
 
 struct MprofAllocCount {
 	size_t malloc;
@@ -23,6 +26,18 @@ struct MprofAllocCount {
 volatile struct MprofAllocCount * mprofGlobalCounts = NULL;
 
 __thread struct MprofAllocCount * mprofLocalCounts = NULL;
+
+static struct mmapArea countsArea = MMAP_AREA_NULL; 
+static sem_t mmapSem;
+volatile size_t threadID = 0;
+
+static void mprofCountInit( void ) {
+	sem_init( &mmapSem, 0, 1 );
+	assert( mmapOpen( &countsArea, "./mprof.counts", true ) );
+	assert( mmapSize( &countsArea, sizeof( struct MprofAllocCount ) * 10, MMAP_AREA_SET ) );
+}
+
+//static void mporfCountDestroy
 
 //put a thread-local counter struct on the global list if we need one
 static void mprofCountThreadInit( void ) {
@@ -101,4 +116,6 @@ static void mprofCountDestruct( void ) {
 	printf( "\n" );
 }
 
-const struct AllocatorVtable mprofCountVtable = { &mallocCount, &freeCount, &callocCount, &reallocCount, NULL, &mprofCountDestruct, "Count" };
+
+
+const struct AllocatorVtable mprofCountVtable = { &mallocCount, &freeCount, &callocCount, &reallocCount, &mprofCountInit, &mprofCountDestruct, "Count" };
