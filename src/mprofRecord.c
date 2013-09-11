@@ -9,6 +9,7 @@
 #define _GNU_SOURCE
 #include <mprofRecord.h>
 #include <sys/time.h>
+#include <sys/stat.h>
 #include <fcntl.h>
 #include <sys/mman.h>
 #include <sys/types.h>
@@ -92,12 +93,15 @@ bool mmapSize( struct mmapArea * in_out_area, const size_t in_size, const int in
 			ret = false;
 		}
 
+		/*if( finalSize ) {
+			finalSize = ( ( finalSize - 1 )/( 4096 * 1024 ) + 1 ) * (4096 * 1024 );
+		}*/
+
 		if( ftruncate( in_out_area->fd, finalSize ) ) {
 			perror( "mmapSize: ftruncate:" );
 			break;
 		}
 
-		//munmap( in_out_area->base, in_out_area->fileSize );
 		if( in_out_area->base ) {
 			void * result = mremap( in_out_area->base, in_out_area->fileSize, finalSize, 0 );
 			if( in_out_area->base != result ) {
@@ -105,9 +109,10 @@ bool mmapSize( struct mmapArea * in_out_area, const size_t in_size, const int in
 				break;
 			}
 		} else {
-			in_out_area->base = mmap( NULL, in_out_area->fileSize, PROT_READ | PROT_WRITE, MAP_HUGETLB | MAP_SHARED, in_out_area->fd, 0 );
-			if( NULL == in_out_area->base ) {
+			in_out_area->base = mmap( NULL, finalSize, PROT_READ | PROT_WRITE, /*MAP_HUGETLB |*/ MAP_SHARED, in_out_area->fd, 0 );
+			if( (void*) -1 == in_out_area->base ) {
 				perror( "mmap:" );
+				in_out_area->base = NULL;
 				break;
 			}
 		}

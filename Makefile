@@ -15,13 +15,16 @@ $(PROJECT): $(OBJECTS)
 	gcc src/libmprof.c -fPIC -shared -ldl -Wl,-soname,libmprof.so.0.1 -o $(PROJECT) $(CFLAGS) $(OBJECTS) $(LDLIBS)
 
 test: test.o
-	gcc test.o $(CFLAGS) -O0 -o test $(LDLIBS)
+	gcc test.o $(CFLAGS) -O0 -o test
 
+latencyBench: src/latencyBench.o
+	gcc src/latencyBench.o $(CFLAGS) -o latencyBench
 clean:
 	rm -f $(PROJECT)
 	rm -f $(OBJECTS)
 	rm -f src/libmprof.o
 	rm -f test test.o
+	rm -f latencyBench
 
 edit-all:
 	gedit Makefile src/*.c include/*.h &

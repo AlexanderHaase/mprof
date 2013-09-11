@@ -20,10 +20,7 @@ struct MprofAllocCount {
 	size_t free;
 	size_t calloc;
 	size_t realloc;
-	struct MprofAllocCount * nextThread;
 };
-
-volatile struct MprofAllocCount * mprofGlobalCounts = NULL;
 
 __thread struct MprofAllocCount * mprofLocalCounts = NULL;
 
@@ -31,27 +28,34 @@ static struct mmapArea countsArea = MMAP_AREA_NULL;
 static sem_t mmapSem;
 volatile size_t threadID = 0;
 
-static void mprofCountInit( void ) {
+static void mprofCountConstruct( void ) {
 	sem_init( &mmapSem, 0, 1 );
 	assert( mmapOpen( &countsArea, "./mprof.counts", true ) );
-	assert( mmapSize( &countsArea, sizeof( struct MprofAllocCount ) * 10, MMAP_AREA_SET ) );
+	assert( mmapSize( &countsArea, sizeof( struct MprofAllocCount ), MMAP_AREA_SET ) );
 }
 
-//static void mporfCountDestroy
+static void mprofCountDestruct( void ) {
+	sem_destroy( &mmapSem );
+	mmapClose( &countsArea );
+}
 
-//put a thread-local counter struct on the global list if we need one
 static void mprofCountThreadInit( void ) {
 	if( mprofLocalCounts == NULL ) {
-		mprofLocalCounts = defaultVtable.calloc( sizeof( struct MprofAllocCount ), 1 );
+		//get an index into the mmapArea
+		size_t mmapIndex = __sync_fetch_and_add( &threadID, 1 );
 
-		//atomically push onto global list
-		struct MprofAllocCount * oldValue = ( struct MprofAllocCount * ) mprofGlobalCounts;
-		struct MprofAllocCount * testValue;
-		do {
-			testValue = oldValue;
-			mprofLocalCounts->nextThread = oldValue;
-			oldValue = ( struct MprofAllocCount * ) __sync_val_compare_and_swap( &mprofGlobalCounts, oldValue, mprofLocalCounts );
-		} while( testValue != oldValue );
+		//expand the mmap area if it's too small
+		const size_t minSize = ( 1 + mmapIndex ) * sizeof( struct MprofAllocCount );
+		if( minSize < countsArea.fileSize ) {
+			sem_wait( &mmapSem );
+			if( minSize < countsArea.fileSize ) {
+				assert( mmapSize( &countsArea, minSize, MMAP_AREA_SET ) );
+			}
+			sem_post( &mmapSem );
+		}
+
+		//make a pointer
+		mprofLocalCounts = ( (struct MprofAllocCount *) countsArea.base ) + mmapIndex;
 	}
 }
 
@@ -79,43 +83,13 @@ static void * reallocCount( void * in_ptr, size_t in_size ) {
 	return defaultVtable.realloc( in_ptr, in_size );
 }
 
+/*
 static void mprofCountPrintf( const struct MprofAllocCount * counts ) {
 	printf( "malloc:\t%llu\tfree:\t%llu\tcalloc:\t%llu\trealloc:\t%llu", 
 		(unsigned long long) counts->malloc, 
 		(unsigned long long) counts->free, 
 		(unsigned long long) counts->calloc, 
 		(unsigned long long) counts->realloc );
-}
+}*/
 
-static void mprofCountDestruct( void ) {
-	//printf may alloc, protect ourselves
-	mprofVtable = defaultVtable;
-
-	struct MprofAllocCount totals;
-	memset( &totals, 0, sizeof( struct MprofAllocCount ) );
-
-	size_t nThreads = 0;
-
-	while( mprofGlobalCounts ) {
-		struct MprofAllocCount * counts = ( struct MprofAllocCount * ) mprofGlobalCounts;
-		totals.malloc += counts->malloc;
-		totals.free += counts->free;
-		totals.calloc += counts->calloc;
-		totals.realloc += counts->realloc;
-		printf( "Thread %llu call counts: ", (unsigned long long) nThreads++ );
-		mprofCountPrintf( counts );
-		printf( "\n" );
-
-		//pop record
-		mprofGlobalCounts = ( volatile struct MprofAllocCount * ) counts->nextThread;
-		defaultVtable.free( counts );
-	}
-
-	printf( "Total of %llu thread(s) call counts: ", (unsigned long long) nThreads );
-	mprofCountPrintf( &totals );
-	printf( "\n" );
-}
-
-
-
-const struct AllocatorVtable mprofCountVtable = { &mallocCount, &freeCount, &callocCount, &reallocCount, &mprofCountInit, &mprofCountDestruct, "Count" };
+const struct AllocatorVtable mprofCountVtable = { &mallocCount, &freeCount, &callocCount, &reallocCount, &mprofCountConstruct, &mprofCountDestruct, "Count" };
