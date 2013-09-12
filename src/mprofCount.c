@@ -15,23 +15,17 @@
 #include <semaphore.h>
 #include <assert.h>
 
-struct MprofAllocCount {
-	size_t malloc;
-	size_t free;
-	size_t calloc;
-	size_t realloc;
-};
-
-__thread struct MprofAllocCount * mprofLocalCounts = NULL;
+__thread struct MprofRecordCount * mprofLocalCounts = NULL;
 
 static struct mmapArea countsArea = MMAP_AREA_NULL; 
 static sem_t mmapSem;
 volatile size_t threadID = 0;
 
 static void mprofCountConstruct( void ) {
+	mprofRecordInit();
 	sem_init( &mmapSem, 0, 1 );
-	assert( mmapOpen( &countsArea, "./mprof.counts", true ) );
-	assert( mmapSize( &countsArea, sizeof( struct MprofAllocCount ), MMAP_AREA_SET ) );
+	assert( mmapOpen( &countsArea, "./mprof.counts", O_RDWR | O_TRUNC | O_CREAT ) );
+	assert( mmapSize( &countsArea, sizeof( struct MprofRecordCount ), MMAP_AREA_SET ) );
 }
 
 static void mprofCountDestruct( void ) {
@@ -45,17 +39,19 @@ static void mprofCountThreadInit( void ) {
 		size_t mmapIndex = __sync_fetch_and_add( &threadID, 1 );
 
 		//expand the mmap area if it's too small
-		const size_t minSize = ( 1 + mmapIndex ) * sizeof( struct MprofAllocCount );
-		if( minSize < countsArea.fileSize ) {
+		const size_t minSize = ( 1 + mmapIndex ) * sizeof( struct MprofRecordCount );
+		if( minSize > countsArea.fileSize ) {
 			sem_wait( &mmapSem );
-			if( minSize < countsArea.fileSize ) {
+			if( minSize > countsArea.fileSize ) {
 				assert( mmapSize( &countsArea, minSize, MMAP_AREA_SET ) );
 			}
 			sem_post( &mmapSem );
 		}
 
 		//make a pointer
-		mprofLocalCounts = ( (struct MprofAllocCount *) countsArea.base ) + mmapIndex;
+		mprofLocalCounts = ( (struct MprofRecordCount *) countsArea.base ) + mmapIndex;
+		mprofLocalCounts->header.mode = MPROF_MODE_COUNTS;
+		mprofLocalCounts->thread = mmapIndex;
 	}
 }
 
@@ -84,7 +80,7 @@ static void * reallocCount( void * in_ptr, size_t in_size ) {
 }
 
 /*
-static void mprofCountPrintf( const struct MprofAllocCount * counts ) {
+static void mprofCountPrintf( const struct MprofRecordCount * counts ) {
 	printf( "malloc:\t%llu\tfree:\t%llu\tcalloc:\t%llu\trealloc:\t%llu", 
 		(unsigned long long) counts->malloc, 
 		(unsigned long long) counts->free, 

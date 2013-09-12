@@ -5,15 +5,11 @@
 	License: LGPL
 
 	base file for the shared library, sets up mprof bindings.
-
-	getEnv MPROF_CONF
-	INIT->{ LD_NEXT, SO_LOAD }
-	SO_LOAD->{ SO_NAME }
-	MODE->{ logFD, mmapPrep, mmapRecord }
 */
 #include <Personality.h>
 #include <mprofLDInit.h>
 #include <mprofLogFD.h>
+#include <mprofLogMmap.h>
 #include <mprofCount.h>
 #include <ParseEnv.h>
 #include <TmpAlloc.h>
@@ -24,7 +20,7 @@
 const char * defaultConfig = "INIT=LD_NEXT MODE=Count";
 
 const struct AllocatorVtable * mprofInitTargets[] = { &mprofLDInitVtable, NULL };
-const struct AllocatorVtable * mprofModeTargets[] = { &mprofLogFDVtable, &mprofCountVtable, NULL };
+const struct AllocatorVtable * mprofModeTargets[] = { &mprofLogFDVtable, &mprofCountVtable, &mprofLogMmapVtable, NULL };
 
 
 const struct AllocatorVtable * lookupVtable( const char * in_str, size_t in_strSize,  const struct AllocatorVtable * in_tables[] ) {

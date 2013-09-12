@@ -4,7 +4,8 @@
 	Created: 2013-09-08
 	License: LGPL
 
-	Record format for binary per-allocation tracking.
+	Record format for binary per-allocation tracking. Records should be
+	equally sized.
 */
 #define _GNU_SOURCE
 #include <mprofRecord.h>
@@ -16,22 +17,30 @@
 #include <unistd.h>
 #include <string.h>
 #include <stdio.h>
+#include <assert.h>
 
-void mprofRecordTimeStamp( struct MprofRecord * in_out_record ) {
+#define HAS_FLAG( _value_, _flag_ ) \
+	( ( ( _value_ ) & ( _flag_ ) ) == ( _flag_ ) )
+
+void mprofRecordTimeStamp( struct MprofRecordAlloc * in_out_record ) {
 	struct timeval tv;
 	gettimeofday( &tv, NULL );
 	in_out_record->sec = tv.tv_sec;
 	in_out_record->usec = tv.tv_usec;
 }
 
+void mprofRecordInit( void ) {
+	assert( sizeof( struct MprofRecordEmpty ) == sizeof( struct MprofRecordCount ) );
+	assert( sizeof( struct MprofRecordAlloc ) == sizeof( struct MprofRecordCount ) );
+}
 
-bool mmapOpen( struct mmapArea * out_area, const char * in_path, bool in_trunc ) {
+bool mmapOpen( struct mmapArea * out_area, const char * in_path, int in_openFlags ) {
 	bool ret = false;
 
 	memset( out_area, 0, sizeof( struct mmapArea ) );
 
 	do {
-		out_area->fd = open( in_path, ( in_trunc ? O_RDWR | O_TRUNC | O_CREAT : O_RDWR | O_CREAT ), S_IRUSR | S_IWUSR );
+		out_area->fd = open( in_path, in_openFlags, S_IRUSR | S_IWUSR );
 	
 		if( out_area->fd < 0 ) {
 			perror("mmapOpen: ");
@@ -43,11 +52,24 @@ bool mmapOpen( struct mmapArea * out_area, const char * in_path, bool in_trunc )
 			break;
 		}
 
-		out_area->fileSize = st.st_blocks * 512;
+		out_area->fileSize = st.st_size;
+
+		int mmapProt = 0;
+		if( HAS_FLAG( in_openFlags, O_RDWR ) ) {
+			mmapProt |= PROT_READ | PROT_WRITE;
+		} else if( HAS_FLAG( in_openFlags, O_RDONLY ) ) {
+			mmapProt |= PROT_READ;
+		} else if( HAS_FLAG( in_openFlags, O_WRONLY ) ) {
+			mmapProt |= PROT_WRITE;
+		} else {
+			fprintf( stderr, "mmapOpen: couldn't determine access mode for mapping\n" );
+			break;
+		}
 
 		if( out_area->fileSize ) {
-			out_area->base = mmap( NULL, out_area->fileSize, PROT_READ | PROT_WRITE, MAP_HUGETLB | MAP_SHARED, out_area->fd, 0 );
-			if( out_area->base == NULL ) {
+			out_area->base = mmap( NULL, out_area->fileSize, mmapProt, MAP_SHARED, out_area->fd, 0 );
+			if( out_area->base == (void*) -1 ) {
+				out_area->base = NULL;
 				break;
 			}
 		}
