@@ -10,6 +10,10 @@
 #include <mprofRecord.h>
 #include <semaphore.h>
 #include <assert.h>
+#include <ParseEnv.h>
+#include <stdlib.h>
+#include <TmpAlloc.h>
+#include <string.h>
 
 //in terms of records
 static size_t cacheQty = 10;
@@ -38,7 +42,26 @@ static void populateCache( void ) {
 }
 
 static void mprofLogMmapConstruct( void ) {
-	assert( mmapOpen( &area, "mprof.log", O_RDWR | O_TRUNC | O_CREAT ) );
+	size_t argSize;
+	const char * arg = findArg( getConfStr(), "LOG_QTY", &argSize );
+	if( arg ) {
+		growthQty = strtol( arg, NULL, 10 );
+	}
+
+	arg = findArg( getConfStr(), "CACHE_QTY", &argSize );
+	if( arg ) {
+		cacheQty = strtol( arg, NULL, 10 );
+	}
+
+	arg = findArg( getConfStr(), "COUNTS_PATH", &argSize );
+	if( arg ) {
+		char * tmp = tmpAllocVtable.calloc( argSize + 1, sizeof( char ) );
+		strncpy( tmp, arg, argSize );
+		arg = tmp;
+	} else {
+		arg = "./mprof.log";
+	}
+	assert( mmapOpen( &area, arg, O_RDWR | O_TRUNC | O_CREAT ) );
 	assert( mmapSize( &area, growthQty * sizeof( struct MprofRecordAlloc ), MMAP_AREA_SET ) );
 	sem_init( &mmapSem, 0, 1 );
 }

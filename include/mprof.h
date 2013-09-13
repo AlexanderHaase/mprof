@@ -13,9 +13,9 @@
 #include <mprofRecord.h>
 #include <stdio.h>
 
-void mprofCountsPrint( FILE * out_stream, const struct MprofRecordCounts * in_counts );
+void mprofCountsPrint( FILE * out_stream, const struct MprofRecordCount * in_counts );
 
-void mprofCountsTotal( const struct MprofRecordCounts * in_counts, const size_t in_size, struct MprofRecordCounts * out_total );
+void mprofCountsTotal( const struct MprofRecordCount * in_counts, const size_t in_size, struct MprofRecordCount * out_total );
 
 bool mprofCountsDump( FILE * out_stream, const char * in_path );
 

@@ -64,6 +64,9 @@ const char * getValue( const char * in_value, size_t * out_size ) {
 
 
 const char * findArg( const char * in_args, const char * in_key, size_t * out_size ) {
+	if( ! in_args || ! in_key || ! out_size ) {
+		return NULL;
+	}
 	const char * key = findKey( in_args, in_key );
 	if( ! key ) {
 		out_size = 0;
@@ -72,4 +75,3 @@ const char * findArg( const char * in_args, const char * in_key, size_t * out_si
 		return getValue( key + strlen( in_key ), out_size );
 	}
 }
-

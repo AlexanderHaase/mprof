@@ -9,6 +9,7 @@
 	-dump binary formats to text.
 	-set up preloading
 */
+#define _GNU_SOURCE
 #include <mprofRecord.h>
 #include <getopt.h>
 #include <stdio.h>
@@ -16,23 +17,47 @@
 #include <unistd.h>
 #include <string.h>
 
+#define NONZEROMULTIPLE( _value_, _base_ ) \
+	( (_value_) != 0 && ( _value_ ) % ( _base_ ) == 0 )
+
+#define UNSIGNEDPAD( _value_ )	\
+	( (unsigned long long) ( _value_ ) )
+
 void mprofCountsPrint( FILE * out_stream, const struct MprofRecordCount * in_counts ) {
-	fprintf( out_stream, "Thread:\t%llu\tmalloc:\t%llu\tfree:\t%llu\tcalloc:\t%llu\trealloc:\t%llu\n",
+	unsigned long long transactions =
+		(unsigned long long) in_counts->malloc +
+		(unsigned long long) in_counts->free +
+		(unsigned long long) in_counts->calloc + 
+		(unsigned long long) in_counts->realloc; 
+	fprintf( out_stream, "Thread:\t%llu\tmalloc:\t%llu\tfree:\t%llu\tcalloc:\t%llu\trealloc:\t%lluTotal:\t%llu\n",
 		(unsigned long long) in_counts->thread,
 		(unsigned long long) in_counts->malloc,
 		(unsigned long long) in_counts->free,
 		(unsigned long long) in_counts->calloc, 
-		(unsigned long long) in_counts->realloc );
+		(unsigned long long) in_counts->realloc,
+		transactions );
 }
 
 
-void mprofCountsTotal( const struct MprofRecordCount * in_counts, const size_t in_size, struct MprofRecordCount * out_total ) {
+size_t mprofCountsTotal( const struct MprofRecordCount * in_counts, const size_t in_size, struct MprofRecordCount * out_total ) {
+	size_t ret = 0;
 	for( size_t index = 0; index < in_size; index++ ) {
-		out_total->malloc += in_counts[ index ].malloc;
-		out_total->free += in_counts[ index ].free;
-		out_total->calloc += in_counts[ index ].calloc;
-		out_total->realloc += in_counts[ index ].realloc;
+		ret += in_counts[ index ].malloc;
+		ret += in_counts[ index ].free;
+		ret += in_counts[ index ].calloc;
+		ret += in_counts[ index ].realloc;
 	}
+
+	if( out_total ) {
+		for( size_t index = 0; index < in_size; index++ ) {
+			out_total->malloc += in_counts[ index ].malloc;
+			out_total->free += in_counts[ index ].free;
+			out_total->calloc += in_counts[ index ].calloc;
+			out_total->realloc += in_counts[ index ].realloc;
+		}
+	}
+
+	return ret;
 }
 
 bool mprofCountsDumpFile( FILE * out_stream, const char * in_path ) {
@@ -44,7 +69,7 @@ bool mprofCountsDumpFile( FILE * out_stream, const char * in_path ) {
 		if( ! mmapOpen( &area, in_path, O_RDONLY ) ) {
 			break;
 		}
-		if( area.fileSize == 0 || area.fileSize % sizeof( struct MprofRecordCount ) != 0 ) {
+		if( ! NONZEROMULTIPLE( area.fileSize, sizeof( struct MprofRecordCount ) ) ) {
 			break;
 		}
 		const size_t qty = area.fileSize / sizeof( struct MprofRecordCount );
@@ -79,6 +104,157 @@ bool mprofCountsDumpFile( FILE * out_stream, const char * in_path ) {
 	return ret;
 }
 
+bool mprofTestProgram( const char * in_cmdArg, const char * in_countsPath, const char * in_logPath ) {
+	
+	struct mmapArea area;
+	
+	bool ret = false;
+	char * mprofConfig = NULL;
+	
+	do {
+		asprintf( &mprofConfig, "INIT=LD_NEXT MODE=Count COUNTS_PATH='%s'", in_countsPath );
+		if( mprofConfig == NULL ) {
+			break;
+		}
+		if( setenv( "LD_PRELOAD", "./libmprof.so", true ) ) {
+			perror( "mprof: set 'LD_PRELOAD'" );
+			break;
+		}
+		if( setenv( "MPROF_CONF", mprofConfig, true ) ) {
+			perror( "mprof: set 'MPROF_CONF'" );
+			break;
+		}
+		if( system( in_cmdArg ) ) {
+			fprintf( stderr, "mprof: Warning, non-zero result for command '%s'\n", in_cmdArg );
+		}
+
+		if( ! mmapOpen( &area, in_countsPath, O_RDONLY ) ) {
+			break;
+		}
+
+		if( ! NONZEROMULTIPLE( area.fileSize, sizeof( struct MprofRecordCount ) ) ) {
+			break;
+		}
+
+		const size_t nThreads = area.fileSize / sizeof( struct MprofRecordCount );
+
+		const struct MprofRecordCount * counts = (struct MprofRecordCount *) area.base;
+	
+		size_t index;
+		for( index = 0; index < nThreads; ++index ) {
+			if( counts->header.mode != MPROF_MODE_COUNTS ) {
+				break;	
+			}
+		}
+		if( index < nThreads ) {
+			break;
+		}
+
+		size_t cacheQty = 100;
+		size_t totalAllocs = mprofCountsTotal( counts, nThreads, NULL );
+		totalAllocs += cacheQty * nThreads;
+
+		mmapClose( &area );
+
+		free( mprofConfig );
+		asprintf( &mprofConfig, "INIT=LD_NEXT MODE=LogMmap LOG_QTY=%llu CACHE_QTY=%llu LOG_PATH='%s'", UNSIGNEDPAD( totalAllocs ), UNSIGNEDPAD( cacheQty ), in_logPath );
+		if( NULL == mprofConfig ) {
+			break;
+		}
+
+		if( setenv( "MPROF_CONF", mprofConfig, true ) ) {
+			perror( "mprof: set 'MPROF_CONF'" );
+			break;
+		}
+
+		if( system( in_cmdArg ) ) {
+			fprintf( stderr, "mprof: Warning, non-zero result for command '%s'\n", in_cmdArg );
+		}
+		
+	} while( false );
+
+	free( mprofConfig );
+	mmapClose( &area );
+	
+	return ret;
+}
+
+#define MODE_DUMP_COUNTS	(0u)
+#define MODE_HELP		(1u)
+#define MODE_TEST		(2u)
+#define MODE_DUMP_LOG		(3u)
+
+struct MprofMainModes {
+	char * modeName;
+	size_t modeValue;
+};
+
+struct MprofMainModes modes[] = { 
+					{ "DUMP", MODE_DUMP_COUNTS },	
+					{ "TEST", MODE_TEST },
+					{ "HELP", MODE_HELP } 
+				};
+
 int mprofMain( __attribute__(( unused )) int argc, __attribute__(( unused )) char ** argv ) {
-	return ( mprofCountsDumpFile( stdout, "mprof.counts" ) ? 0 : -1 );
+
+	size_t mode = MODE_DUMP_COUNTS;
+	const char * testArg = NULL;
+	const char * countsArg = "mprof.counts";
+	const char * logArg = "mprof.log";
+	int c;
+
+	while( ( c = getopt( argc, argv, "hm:t:c:l:" ) ) != -1 ) {
+		switch( c ) {
+		case ('t'):
+			mode = MODE_TEST;
+			testArg = optarg;
+			break;
+		case ('h'):
+			mode = MODE_HELP;
+			break;
+		case ('c'):
+			countsArg = optarg;
+			break;
+		case ('l'):
+			logArg = optarg;
+			break;
+		case ('m'):
+			for( size_t index = 0;; ++index ) {
+				if( modes[ index ].modeName == NULL ) {
+					fprintf( stderr, "Unknown mode '%s'\n", optarg );
+					return -1;
+				}
+				if( strcmp( optarg, modes[ index ].modeName ) == 0 ) {
+					mode = modes[ index ].modeValue;
+					break;
+				}
+			}
+			break;
+		case ('?'):
+			switch( optopt ) {
+			case ('t'):
+			case ('c'):
+			case ('m'):
+				fprintf( stderr, "-%c requires and argument\n", optopt );
+				break;
+			default:
+				fprintf( stderr, "Unknown option '-%c'.\n", optopt );
+			}
+			return -1;
+		default:
+			abort();
+		}
+	}
+	
+	switch( mode ) {
+	case ( MODE_DUMP_COUNTS ):
+		return ( mprofCountsDumpFile( stdout, countsArg ) ? 0 : -1 );
+	case ( MODE_TEST ):
+		return ( mprofTestProgram( testArg, countsArg, logArg ) ? 0 : -1 );
+	case ( MODE_HELP ):
+		fprintf( stderr, "I'm a jerk, no help yet\n" );
+		return 0;
+	default:
+		abort();
+	}
 }

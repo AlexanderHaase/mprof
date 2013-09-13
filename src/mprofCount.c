@@ -14,6 +14,8 @@
 #include <mprofRecord.h>
 #include <semaphore.h>
 #include <assert.h>
+#include <ParseEnv.h>
+#include <TmpAlloc.h>
 
 __thread struct MprofRecordCount * mprofLocalCounts = NULL;
 
@@ -22,9 +24,18 @@ static sem_t mmapSem;
 volatile size_t threadID = 0;
 
 static void mprofCountConstruct( void ) {
+	size_t valueSize;
+	const char * value = findArg( getConfStr(), "COUNTS_PATH", &valueSize );
+	if( value ) {
+		char * tmp = tmpAllocVtable.calloc( valueSize + 1, sizeof( char ) );
+		strncpy( tmp, value, valueSize );
+		value = tmp;
+	} else {
+		value = "./mprof.counts";
+	}
 	mprofRecordInit();
 	sem_init( &mmapSem, 0, 1 );
-	assert( mmapOpen( &countsArea, "./mprof.counts", O_RDWR | O_TRUNC | O_CREAT ) );
+	assert( mmapOpen( &countsArea, value, O_RDWR | O_TRUNC | O_CREAT ) );
 	assert( mmapSize( &countsArea, sizeof( struct MprofRecordCount ), MMAP_AREA_SET ) );
 }
 
