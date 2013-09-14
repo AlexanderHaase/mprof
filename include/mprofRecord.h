@@ -13,6 +13,12 @@
 #include <stddef.h>
 #include <fcntl.h>
 
+#define NONZEROMULTIPLE( _value_, _base_ ) \
+	( (_value_) != 0 && ( _value_ ) % ( _base_ ) == 0 )
+
+#define UNSIGNEDPAD( _value_ )	\
+	( (unsigned long long) ( _value_ ) )
+
 #define MPROF_MODE_EMPTY	( 0u )
 #define MPROF_MODE_MALLOC	( 1u )
 #define MPROF_MODE_FREE		( 2u )

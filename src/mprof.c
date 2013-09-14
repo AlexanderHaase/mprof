@@ -16,12 +16,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <string.h>
-
-#define NONZEROMULTIPLE( _value_, _base_ ) \
-	( (_value_) != 0 && ( _value_ ) % ( _base_ ) == 0 )
-
-#define UNSIGNEDPAD( _value_ )	\
-	( (unsigned long long) ( _value_ ) )
+#include <mprofProfile.h>
 
 void mprofCountsPrint( FILE * out_stream, const struct MprofRecordCount * in_counts ) {
 	unsigned long long transactions =
@@ -170,6 +165,17 @@ bool mprofTestProgram( const char * in_cmdArg, const char * in_countsPath, const
 		if( system( in_cmdArg ) ) {
 			fprintf( stderr, "mprof: Warning, non-zero result for command '%s'\n", in_cmdArg );
 		}
+
+		if( ! mmapOpen( &area, in_logPath, O_RDONLY ) ) {
+			break;
+		}
+
+		if( ! NONZEROMULTIPLE( area.fileSize, sizeof( struct MprofRecordCount ) ) ) {
+			break;
+		}
+
+		const size_t recordQty = area.fileSize / sizeof( struct MprofRecordCount );
+		mprofSizeAnalysis( stdout, (struct MprofRecordAlloc *) area.base, recordQty );
 		
 	} while( false );
 
