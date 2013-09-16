@@ -176,6 +176,7 @@ bool mprofTestProgram( const char * in_cmdArg, const char * in_countsPath, const
 
 		const size_t recordQty = area.fileSize / sizeof( struct MprofRecordCount );
 		mprofSizeAnalysis( stdout, (struct MprofRecordAlloc *) area.base, recordQty );
+		mprofCompactnessAnalysis( stdout, (struct MprofRecordAlloc *) area.base, recordQty );
 		
 	} while( false );
 

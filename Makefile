@@ -38,7 +38,7 @@ clean:
 	rm -f test test.o mprof latencyBench libmprof.so
 
 edit-all:
-	gedit Makefile src/*.c include/*.h &
+	gedit Makefile src/*.c src/*.cpp include/*.h &
 commit-all: 
-	git add Makefile src/*.c include/*.h
+	git add Makefile src/*.c src/*.cpp include/*.h
 
