@@ -22,6 +22,13 @@ namespace mprof {
 		return ( in_recordA->sec < in_recordB->sec ) || ( in_recordA->sec == in_recordB->sec && in_recordA->usec < in_recordB->usec );
 	}
 
+	uint64_t deltaT( const struct MprofRecordAlloc * in_recordA, const struct MprofRecordAlloc * in_recordB ) {
+		if( olderThan( in_recordA, in_recordB ) ) {
+			return ( in_recordB->sec - in_recordA->sec ) * 1000000lu + in_recordB->usec - in_recordA->usec;
+		} else {
+			return ( in_recordA->sec - in_recordB->sec ) * 1000000lu + in_recordA->usec - in_recordB->usec;
+		}
+	}
 	/*!	\brief Counts the number of allocations of each size, total
 	 *	allocations, and total allocated.
 	 *

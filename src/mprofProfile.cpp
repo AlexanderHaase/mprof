@@ -99,27 +99,47 @@ void mprof::CompactnessAnalysis::reset( const uint64_t in_pageSize ) {
 
 void mprof::CompactnessAnalysis::build( const struct MprofRecordAlloc * in_record, std::vector<size_t>::const_iterator in_orderBegin, std::vector<size_t>::const_iterator in_orderEnd ) {
 	std::list<size_t> retryList;
+	size_t lastIndex = *in_orderBegin;
 	for( std::vector<size_t>::const_iterator orderItr = in_orderBegin; orderItr != in_orderEnd; ++orderItr ) {
 		
-		if( false == addRecord( in_record, *orderItr ) ) {
+		if( addRecord( in_record, *orderItr ) ) {
+			lastIndex = *orderItr;
+		} else {
 			retryList.push_back( *orderItr );
 		}
 		//keep retrying--FIXME: handle realloc better( damn you realloc )
-		for( std::list<size_t>::iterator retryItr = retryList.begin(); retryItr != retryList.end(); ) {
-			if( addRecord( in_record, *retryItr ) ) {
-				retryItr = retryList.erase( retryItr );
-			} else if( olderThan( in_record + *retryItr, in_record + *orderItr ) ) {
-				size_t address, size;
-				if( getAlloc( in_record + *retryItr, address, size ) ) {
-					std::cerr << "Warning: mprof::CompactnessAnalysis::build: found double alloc at index '" << *orderItr << "' for address '" << std::hex << address << std::dec << "'" << std::endl;
-				} 
-				if( getFree( in_record + *retryItr, address ) ) {
-					std::cerr << "Warning: mprof::CompactnessAnalysis::build: found unmatched free at index '" << *orderItr << "' for address '" << std::hex << address << std::dec << "'" << std::endl;
+		bool progress = false;
+		do {
+			for( std::list<size_t>::iterator retryItr = retryList.begin(); retryItr != retryList.end(); ) {
+				if( addRecord( in_record, *retryItr ) ) {
+					if( olderThan( in_record + *retryItr, in_record + lastIndex ) ) {
+						std::cerr << "Info: mprof::CompactnessAnalysis::build: detected scheduler/timestamp inversion at index '" << *orderItr << "' of " << deltaT( in_record + *retryItr, in_record + lastIndex ) << " microseconds" << std::endl;
+					}
+					lastIndex = *retryItr;
+					retryItr = retryList.erase( retryItr );
+				} /*else if( olderThan( in_record + *retryItr, in_record + *orderItr ) ) {
+					size_t address, size;
+					if( getAlloc( in_record + *retryItr, address, size ) ) {
+						std::cerr << "Warning: mprof::CompactnessAnalysis::build: found double alloc at index '" << *retryItr << "' for address '" << std::hex << address << std::dec << "'" << std::endl;
+					} 
+					if( getFree( in_record + *retryItr, address ) ) {
+						std::cerr << "Warning: mprof::CompactnessAnalysis::build: found unmatched free at index '" << *retryItr << "' for address '" << std::hex << address << std::dec << "'" << std::endl;
+					}
+					retryItr = retryList.erase( retryItr );
+				}*/ else {
+					++retryItr;
 				}
-				retryItr = retryList.erase( retryItr );
-			} else {
-				++retryItr;
 			}
+		} while( progress );
+	}
+
+	for( std::list<size_t>::iterator retryItr = retryList.begin(); retryItr != retryList.end(); retryItr = retryList.erase( retryItr ) ) {
+		size_t address, size;
+		if( getAlloc( in_record + *retryItr, address, size ) ) {
+			std::cerr << "Warning: mprof::CompactnessAnalysis::build: found double alloc at index '" << *retryItr << "' for address '" << std::hex << address << std::dec << "'" << std::endl;
+		} 
+		if( getFree( in_record + *retryItr, address ) ) {
+			std::cerr << "Warning: mprof::CompactnessAnalysis::build: found unmatched free at index '" << *retryItr << "' for address '" << std::hex << address << std::dec << "'" << std::endl;
 		}
 	}
 }
