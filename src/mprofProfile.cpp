@@ -79,7 +79,7 @@ std::vector<size_t> mprof::sortChrono( const struct MprofRecordAlloc * in_record
 		: record( in_record ) {}
 
 		bool operator()( size_t i, size_t j ) {
-			return ( record[ i ].sec < record[ j ].sec ) || ( record[ i ].sec == record[ j ].sec && record[ i ].usec < record[ j ].usec );
+			return olderThan( record + i, record + j );
 		}
 	} compare( in_record );
 
@@ -93,54 +93,84 @@ void mprof::CompactnessAnalysis::reset( const uint64_t in_pageSize ) {
 	compactness.clear();
 	clientHighWaterMark = 0;
 	serverHighWaterMark = 0;
+	clientSize = 0;
 	vmPageSize = in_pageSize;
 }
 
 void mprof::CompactnessAnalysis::build( const struct MprofRecordAlloc * in_record, std::vector<size_t>::const_iterator in_orderBegin, std::vector<size_t>::const_iterator in_orderEnd ) {
-	uint64_t clientSize = 0;
+	std::list<size_t> retryList;
 	for( std::vector<size_t>::const_iterator orderItr = in_orderBegin; orderItr != in_orderEnd; ++orderItr ) {
-		const struct MprofRecordAlloc * const record = in_record + *orderItr;
-		uint64_t size;
-		uint64_t address;
-
-		std::map< uint64_t, std::list< std::pair<uint64_t, uint64_t> > >::iterator mapItr;
-
-		if( getFree( record, address ) && address ) {
-			mapItr = allocationMap.find( address );
-			if( mapItr == allocationMap.end() || mapItr->second.empty() || mapItr->second.back().second != nullIndex ) {
-				std::cerr << "mprof::CompactnessAnalysis::build: found unmatched free at index '" << *orderItr << "' for address '" << std::hex << address << std::dec << "'" << std::endl;
+		
+		if( false == addRecord( in_record, *orderItr ) ) {
+			retryList.push_back( *orderItr );
+		}
+		//keep retrying--FIXME: handle realloc better( damn you realloc )
+		for( std::list<size_t>::iterator retryItr = retryList.begin(); retryItr != retryList.end(); ) {
+			if( addRecord( in_record, *retryItr ) ) {
+				retryItr = retryList.erase( retryItr );
+			} else if( olderThan( in_record + *retryItr, in_record + *orderItr ) ) {
+				size_t address, size;
+				if( getAlloc( in_record + *retryItr, address, size ) ) {
+					std::cerr << "Warning: mprof::CompactnessAnalysis::build: found double alloc at index '" << *orderItr << "' for address '" << std::hex << address << std::dec << "'" << std::endl;
+				} 
+				if( getFree( in_record + *retryItr, address ) ) {
+					std::cerr << "Warning: mprof::CompactnessAnalysis::build: found unmatched free at index '" << *orderItr << "' for address '" << std::hex << address << std::dec << "'" << std::endl;
+				}
+				retryItr = retryList.erase( retryItr );
 			} else {
-				mapItr->second.back().second = *orderItr;
-				getAlloc( in_record + mapItr->second.back().first, address, size );
-				//adjust client size
-				clientSize -= size;
-
-				//mark vmMap
-				refPages( address, size, false );
-
-				setCompactness( clientSize );
+				++retryItr;
 			}
 		}
-		if( getAlloc( record, address, size ) && address ) {
-			mapItr = allocationMap.find( address );
-			if( mapItr == allocationMap.end() ) {
-				allocationMap[ address ] = std::list< std::pair<uint64_t, uint64_t> >();
-				mapItr = allocationMap.find( address );
-			}
-			mapItr->second.push_back( std::pair<uint64_t, uint64_t>( *orderItr, nullIndex ) );
+	}
+}
 
+bool mprof::CompactnessAnalysis::addRecord( const struct MprofRecordAlloc * in_record, const size_t in_index ) {
+	const struct MprofRecordAlloc * const record = in_record + in_index;
+	uint64_t size;
+	uint64_t address;
+
+	std::map< uint64_t, std::list< std::pair<uint64_t, uint64_t> > >::iterator mapItr;
+
+	if( getFree( record, address ) && address ) {
+		mapItr = allocationMap.find( address );
+		//detect out-of-order record
+		if( mapItr == allocationMap.end() || mapItr->second.empty() || mapItr->second.back().second != nullIndex ) {
+			return false;
+		} else {
+			mapItr->second.back().second = in_index;
+			getAlloc( in_record + mapItr->second.back().first, address, size );
 			//adjust client size
-			clientSize += size;
-			if( clientSize > clientHighWaterMark ) {
-				clientHighWaterMark = clientSize;
-			}
+			clientSize -= size;
 
 			//mark vmMap
-			refPages( address, size, true );
+			refPages( address, size, false );
 
 			setCompactness( clientSize );
 		}
 	}
+	if( getAlloc( record, address, size ) && address ) {
+		mapItr = allocationMap.find( address );
+		//detect out-of-order record
+		if( mapItr == allocationMap.end() ) {
+			allocationMap[ address ] = std::list< std::pair<uint64_t, uint64_t> >();
+			mapItr = allocationMap.find( address );
+		} else if( mapItr->second.back().second == nullIndex ) {
+			return false;
+		}
+		mapItr->second.push_back( std::pair<uint64_t, uint64_t>( in_index, nullIndex ) );
+
+		//adjust client size
+		clientSize += size;
+		if( clientSize > clientHighWaterMark ) {
+			clientHighWaterMark = clientSize;
+		}
+
+		//mark vmMap
+		refPages( address, size, true );
+
+		setCompactness( clientSize );
+	}
+	return true;
 }
 
 void mprof::CompactnessAnalysis::analyze( const struct MprofRecordAlloc * in_record, const std::vector<size_t> in_order, const uint64_t in_pageSize ) {
@@ -193,7 +223,7 @@ bool mprof::CompactnessAnalysis::getFree( const struct MprofRecordAlloc * in_rec
 	switch( in_record->header.mode ) {
 	case ( MPROF_MODE_REALLOC ):
 		out_address = in_record->type.realloc.pointer;
-		return true;
+		return ( in_record->type.realloc.result != 0 );
 	case ( MPROF_MODE_FREE ):
 		out_address = in_record->type.free.pointer;
 		return true;

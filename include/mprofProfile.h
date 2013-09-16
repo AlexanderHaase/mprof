@@ -18,6 +18,10 @@
 #include <list>
 
 namespace mprof {
+	inline bool olderThan( const struct MprofRecordAlloc * in_recordA, const struct MprofRecordAlloc * in_recordB ) {
+		return ( in_recordA->sec < in_recordB->sec ) || ( in_recordA->sec == in_recordB->sec && in_recordA->usec < in_recordB->usec );
+	}
+
 	/*!	\brief Counts the number of allocations of each size, total
 	 *	allocations, and total allocated.
 	 *
@@ -94,6 +98,7 @@ namespace mprof {
 		uint64_t clientHighWaterMark;
 		uint64_t serverHighWaterMark;
 		uint64_t vmPageSize;
+		uint64_t clientSize;
 		void reset( const uint64_t in_pageSize );
 		static const uint64_t nullIndex;
 		std::list<float> compactness;
@@ -104,6 +109,8 @@ namespace mprof {
 
 		static bool getAlloc( const struct MprofRecordAlloc * in_record, uint64_t & out_address, uint64_t & out_size );
 		static bool getFree( const struct MprofRecordAlloc * in_record, uint64_t & out_address );
+
+		bool addRecord( const struct MprofRecordAlloc * in_record, const size_t in_index );
 
 		void build( const struct MprofRecordAlloc * in_record, std::vector<size_t>::const_iterator in_orderBegin, std::vector<size_t>::const_iterator in_orderEnd );
 	public:
