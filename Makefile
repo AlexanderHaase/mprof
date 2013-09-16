@@ -44,14 +44,14 @@ libmprof.so: $(LIB_OBJECTS)
 mprof: $(MPROF_OBJECTS) $(CPP_OBJECTS)
 	$(CXX) -o mprof $(CXXFLAGS) $(MPROF_OBJECTS) $(CPP_OBJECTS) $(LDLIBS) -std=c++0x
 
-test: test.o
-	$(CC) test.o $(CFLAGS) -O0 -o test -lpthread
+test: src/test.o
+	$(CC) src/test.o $(CFLAGS) -O0 -o test -lpthread
 
 latencyBench: src/latencyBench.o
 	$(CC) src/latencyBench.o $(CFLAGS) -O3 -o latencyBench
 clean:
 	rm -f src/*.o
-	rm -f test test.o mprof latencyBench libmprof.so
+	rm -f test mprof latencyBench libmprof.so
 
 edit-all:
 	gedit Makefile src/*.c src/*.cpp include/*.h &
