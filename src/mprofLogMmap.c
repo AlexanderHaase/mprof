@@ -77,7 +77,7 @@ static void * mallocLogMmap( size_t in_size ) {
 		populateCache();
 	}
 	cache->type.malloc.size = in_size;
-	cache->type.malloc.result = (uint64_t) ret;
+	cache->type.malloc.result = (size_t) ret;
 	cache->header.mode = MPROF_MODE_MALLOC;
 	mprofRecordTimeStamp( cache++ );
 	return ret;
@@ -88,7 +88,7 @@ static void freeLogMmap( void * in_ptr ) {
 	if( --cacheRemaining == 0 ) {
 		populateCache();
 	}
-	cache->type.free.pointer = (uint64_t) in_ptr;
+	cache->type.free.pointer = (size_t) in_ptr;
 	cache->header.mode = MPROF_MODE_FREE;
 	mprofRecordTimeStamp( cache++ );
 }
@@ -100,7 +100,7 @@ static void * callocLogMmap( size_t in_qty, size_t in_size ) {
 	}
 	cache->type.calloc.size = in_size;
 	cache->type.calloc.count = in_qty;
-	cache->type.calloc.result = (uint64_t) ret;
+	cache->type.calloc.result = (size_t) ret;
 	cache->header.mode = MPROF_MODE_CALLOC;
 	mprofRecordTimeStamp( cache++ );
 	return ret;
@@ -112,8 +112,8 @@ static void * reallocLogMmap( void * in_ptr, size_t in_size ) {
 		populateCache();
 	}
 	cache->type.realloc.size = in_size;
-	cache->type.realloc.pointer = (uint64_t) in_ptr;
-	cache->type.realloc.result = (uint64_t) ret;
+	cache->type.realloc.pointer = (size_t) in_ptr;
+	cache->type.realloc.result = (size_t) ret;
 	cache->header.mode = MPROF_MODE_REALLOC;
 	mprofRecordTimeStamp( cache++ );
 	return ret;
