@@ -35,7 +35,7 @@ CPP_OBJECTS :=				\
 
 CXXFLAGS := -Wall -Wextra -Werror --pedantic -I./include -g -std=c++0x
 CFLAGS := -Wall -Wextra -Werror --pedantic -I./include -g -std=c99 -fPIC
-LDLIBS := -lpthread -ldl
+LDLIBS := -lpthread -ldl -lrt
 
 #LDLIBS must be the last arg to gcc for some reason....
 libmprof.so: $(LIB_OBJECTS)
@@ -45,7 +45,7 @@ mprof: $(MPROF_OBJECTS) $(CPP_OBJECTS)
 	$(CXX) -o mprof $(CXXFLAGS) $(MPROF_OBJECTS) $(CPP_OBJECTS) $(LDLIBS) -std=c++0x
 
 test: src/test.o
-	$(CC) src/test.o $(CFLAGS) -O0 -o test -lpthread
+	$(CC) src/test.o $(CFLAGS) -O0 -o test -lpthread -lrt
 
 latencyBench: src/latencyBench.o
 	$(CC) src/latencyBench.o $(CFLAGS) -O3 -o latencyBench

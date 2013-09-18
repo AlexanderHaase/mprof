@@ -33,7 +33,9 @@
 
 namespace mprof {
 	inline bool olderThan( const struct MprofRecordAlloc * in_recordA, const struct MprofRecordAlloc * in_recordB ) {
-		return ( in_recordA->sec < in_recordB->sec ) || ( in_recordA->sec == in_recordB->sec && in_recordA->usec < in_recordB->usec );
+		return ( in_recordA->sec < in_recordB->sec ) 
+			|| ( in_recordA->sec == in_recordB->sec && in_recordA->usec < in_recordB->usec ) 
+			|| ( in_recordA->sec == in_recordB->sec && in_recordA->usec == in_recordB->usec && in_recordA < in_recordB );
 	}
 
 	uint64_t deltaT( const struct MprofRecordAlloc * in_recordA, const struct MprofRecordAlloc * in_recordB ) {

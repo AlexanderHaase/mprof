@@ -23,7 +23,6 @@
 */
 #define _GNU_SOURCE
 #include <mprofRecord.h>
-#include <sys/time.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <sys/mman.h>
@@ -32,6 +31,22 @@
 #include <string.h>
 #include <stdio.h>
 #include <assert.h>
+#include <sys/time.h>
+
+/*
+#include <time.h>
+//#include <linux/time.h>
+#define CLOCK_REALTIME			0
+#define CLOCK_MONOTONIC			1
+#define CLOCK_PROCESS_CPUTIME_ID	2
+#define CLOCK_THREAD_CPUTIME_ID		3
+#define CLOCK_MONOTONIC_RAW		4
+#define CLOCK_REALTIME_COARSE		5
+#define CLOCK_MONOTONIC_COARSE		6
+#define CLOCK_BOOTTIME			7
+#define CLOCK_REALTIME_ALARM		8
+#define CLOCK_BOOTTIME_ALARM		9
+*/
 
 #define HAS_FLAG( _value_, _flag_ ) \
 	( ( ( _value_ ) & ( _flag_ ) ) == ( _flag_ ) )
@@ -41,6 +56,11 @@ void mprofRecordTimeStamp( struct MprofRecordAlloc * in_out_record ) {
 	gettimeofday( &tv, NULL );
 	in_out_record->sec = tv.tv_sec;
 	in_out_record->usec = tv.tv_usec;
+	/* faster, but causes problems....
+	struct timespec tv;
+	clock_gettime( CLOCK_REALTIME_COARSE, &tv );
+	in_out_record->sec = tv.tv_sec;
+	in_out_record->usec = tv.tv_nsec;*/
 }
 
 void mprofRecordInit( void ) {
