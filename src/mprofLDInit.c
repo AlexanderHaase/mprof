@@ -28,15 +28,30 @@
 #include <TmpAlloc.h>
 #include <stdlib.h>
 #include <stdint.h>
+#include <ParseEnv.h>
 
-const char * ldNames[] = { "malloc", "free", "calloc", "realloc", NULL };
+static const char * ldNames[] = { "malloc", "free", "calloc", "realloc", NULL };
+static void * ldHandle = RTLD_NEXT;
 
 static void mprofLDInit( void ) {
 	mprofVtable = tmpAllocVtable;
 
+	/* look for and handle LD_PRELOAD argument in MPROF_CONF */
+	size_t valueSize;
+	const char * value = findArg( getConfStr(), "LD_PRELOAD", &valueSize );
+	if( value ) {
+		char * path = strndup( value, valueSize );
+		ldHandle = dlopen( path, RTLD_LAZY | RTLD_GLOBAL | RTLD_DEEPBIND );
+		if( NULL == ldHandle ) {
+			fprintf( stderr,  "Error: libmprof: Could not open library '%s' specified for preload in env var 'MPROF_CONF'.\n", path );
+			exit( -1 );
+		}
+		free( path );
+	}
+
 	uint8_t * fnPtr = (uint8_t*) &defaultVtable.malloc;
 	for( size_t index = 0; ldNames[ index ] != NULL; index++ ) {
-		void * result = dlsym( RTLD_NEXT, ldNames[ index ] );
+		void * result = dlsym( ldHandle, ldNames[ index ] );
 		if( result ) {
 			memcpy( &fnPtr[ index * sizeof( int(*)( void ) ) ], &result, sizeof( int(*)( void ) ) );
 		} else {
